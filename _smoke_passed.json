@@ -1,0 +1,12 @@
+{
+  "label": "quarantine-bug-02",
+  "port": 7522,
+  "login_url": "http://127.0.0.1:7522/login",
+  "http_status": 200,
+  "checks": [
+    "含登录相关文案",
+    "含密码表单线索"
+  ],
+  "passed": true,
+  "checked_at": "2026-11-22T17:10:27+08:00"
+}
