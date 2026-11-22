@@ -2,18 +2,25 @@ import { api } from '../api.js';
 
 export async function renderSettings(el) {
   const data = await api('/api/settings');
+  const items = data.items || [];
   el.innerHTML = `
     <div class="card">
       <h2>台参数</h2>
       <table>
         <thead><tr><th>项</th><th>说明</th><th>值</th><th></th></tr></thead>
         <tbody>
-          ${(data.items || []).map((s) => `
+          ${items.map((s) => `
             <tr>
-              <td>${s.key}</td>
+              <td>${s.key}${s.readonly ? ' <span class="chip ok">只读</span>' : ''}</td>
               <td>${s.label}</td>
-              <td><input data-key="${s.key}" value="${s.value}" /></td>
-              <td><button data-save="${s.key}">保存</button></td>
+              <td>
+                ${s.readonly
+                  ? `<input data-key="${s.key}" value="${s.value}" disabled />`
+                  : `<input data-key="${s.key}" value="${s.value}" />`}
+              </td>
+              <td>${s.readonly
+                ? '<span class="muted">放行口径锁定，禁止修改</span>'
+                : `<button data-save="${s.key}">保存</button>`}</td>
             </tr>`).join('')}
         </tbody>
       </table>
@@ -21,47 +28,43 @@ export async function renderSettings(el) {
   el.querySelectorAll('[data-save]').forEach((btn) => {
     btn.onclick = async () => {
       const input = el.querySelector(`input[data-key="${btn.dataset.save}"]`);
-      await api('/api/settings/update', {
-        method: 'POST',
-        body: JSON.stringify({ key: btn.dataset.save, value: input.value }),
-      });
+      try {
+        await api('/api/settings/update', {
+          method: 'POST',
+          body: JSON.stringify({ key: btn.dataset.save, value: input.value }),
+        });
+      } catch (e) {
+        window.alert(`保存失败：${e.message}`);
+        return;
+      }
       await renderSettings(el);
     };
   });
 
-  try {
-    const dash = await api('/api/release_pack/dash');
-    el.innerHTML += `<div class="card" style="margin-top:1rem">
-      <h3>放行钉定</h3>
-      <span class="chip">${dash.chip}</span>
-      <p class="muted">读轨 ${dash.active_read} · 切流指纹 ${dash.cutover_fp || '空'} · 拒回刷 ${dash.reject_refresh} · 归档 ${dash.archive_count} · 新旗 ${dash.live_flag || '空'} · 对齐差 ${dash.panel_pack_mismatch}</p>
-      <div class="row">
-        <button id="go_release_pack" type="button">落台</button>
-        <button id="half_release_pack" type="button">半修对齐</button>
-        <button id="cut_release_pack" type="button">切流账册</button>
-        <button id="dual_release_pack" type="button">双写两轨</button>
-      </div>
+  // 只读放行落点账册：只展示切流账册内容，不提供任何写操作
+  const ledger = await api('/api/release_ledger');
+  const rows = ledger.items || [];
+  const summary = ledger.summary || {};
+  el.innerHTML += `
+    <div class="card" style="margin-top:1rem">
+      <h3>放行落点（只读账册）
+        <span class="chip ok">已放行件数 ${summary.released_count ?? rows.length}</span>
+        <span class="chip ${summary.blocked_count ? 'bad' : 'ok'}">指纹拦截 ${summary.blocked_count ?? 0}</span>
+      </h3>
+      <p class="muted">读轨口径：切流账册，只追加、禁回刷；指纹拧花的件由清洗编排拦截。</p>
+      <table>
+        <thead><tr><th>落点</th><th>条目键</th><th>渠道</th><th>仓管</th><th>放行指纹</th><th>落账时刻</th></tr></thead>
+        <tbody>
+          ${rows.map((r) => `
+            <tr>
+              <td>#${r.id}</td>
+              <td>${r.item_key}</td>
+              <td><span class="chip">${r.channel}</span></td>
+              <td>${r.reviewer || ''}</td>
+              <td><code class="fp" title="${r.fingerprint}">${r.fingerprint}</code></td>
+              <td>${r.created_at}</td>
+            </tr>`).join('') || '<tr><td colspan="6" class="muted">暂无放行落点</td></tr>'}
+        </tbody>
+      </table>
     </div>`;
-    const go = el.querySelector('#go_release_pack');
-    if (go) go.onclick = async () => {
-      await api('/api/release_pack/commit', { method:'POST', body: JSON.stringify({ref:1}) });
-      await renderSettings(el);
-    };
-    const half = el.querySelector('#half_release_pack');
-    if (half) half.onclick = async () => {
-      await api('/api/release_pack/half', { method:'POST', body:'{}' });
-      await renderSettings(el);
-    };
-    const cut = el.querySelector('#cut_release_pack');
-    if (cut) cut.onclick = async () => {
-      await api('/api/release_pack/cutover', { method:'POST', body: JSON.stringify({ref_id:1, note:'放行落点'}) });
-      await renderSettings(el);
-    };
-    const dual = el.querySelector('#dual_release_pack');
-    if (dual) dual.onclick = async () => {
-      await api('/api/release_pack/dual', { method:'POST', body: JSON.stringify({note:'放行落点'}) });
-      await renderSettings(el);
-    };
-  } catch (e) { /* optional surface */ }
-
 }

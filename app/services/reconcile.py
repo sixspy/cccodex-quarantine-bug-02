@@ -16,6 +16,7 @@ def list_reports(db_path: str | None = None) -> list[dict]:
 
 def run_reconcile(db_path: str | None = None) -> dict:
     label = settings_svc.get_value("reconcile_label", "隔离对账", db_path)
+    from app.services import release_ledger as ledger
     with get_db(db_path) as conn:
         open_rows = conn.execute(
             "SELECT COUNT(*) AS c FROM quarantine_rows WHERE status='待复核'"
@@ -40,9 +41,12 @@ def run_reconcile(db_path: str | None = None) -> dict:
               )
             """
         ).fetchone()["c"]
+        # 放行指纹拧花的件必须被清洗编排挡住
+        blocked = ledger.blocked_item_ids(db_path)
+        gate_blocked = len(blocked)
         summary = (
             f"{label}：待复核{open_rows} / 已放行{released} / 回炉中{reworking} / "
-            f"已废弃{abandoned} / 错位{mismatch}"
+            f"已废弃{abandoned} / 错位{mismatch} / 指纹拦截{gate_blocked}"
         )
         cur = conn.execute(
             """
@@ -56,12 +60,15 @@ def run_reconcile(db_path: str | None = None) -> dict:
         row = conn.execute(
             "SELECT * FROM reconcile_reports WHERE id=?", (report_id,)
         ).fetchone()
+        data = dict(row)
+        data["gate_blocked"] = gate_blocked
+        data["blocked_item_ids"] = blocked
     audit_svc.write_event("生成对账", "reconcile_report", report_id, summary, db_path=db_path)
-    return dict(row)
+    return data
 
 
 def dashboard(db_path: str | None = None) -> dict:
-    from app.services.release_pack_audit import audit_summary as _release_pack_audit
+    from app.services import release_ledger as ledger
     with get_db(db_path) as conn:
         return {
             "batches": conn.execute("SELECT COUNT(*) AS c FROM capture_batches").fetchone()["c"],
@@ -81,5 +88,5 @@ def dashboard(db_path: str | None = None) -> dict:
                 "SELECT COUNT(*) AS c FROM policy_rules WHERE enabled=1"
             ).fetchone()["c"],
             "audits": conn.execute("SELECT COUNT(*) AS c FROM audit_events").fetchone()["c"],
-            "release_pack_audit": _release_pack_audit(db_path),
+            "release_gate": ledger.gate_summary(db_path),
         }

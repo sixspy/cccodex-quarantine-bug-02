@@ -40,6 +40,13 @@ h2 { margin: 0 0 10px; font-size: 1.15rem; }
 .stat b { display: block; font-size: 1.2rem; }
 .hint-box { border-left: 3px solid var(--accent); padding: 8px 10px; background: #142830; margin: 8px 0 12px; color: var(--muted); font-size: .88rem; }
 .empty { color: var(--muted); padding: 18px 0; text-align: center; }
+.release-landing .landing-row { display: grid; gap: 2px; }
+.release-landing .fp {
+  font-size: .74rem; color: var(--muted);
+  background: #10252d; border: 1px solid var(--line);
+  border-radius: 6px; padding: 2px 6px;
+  word-break: break-all; max-width: 220px;
+}
 @media (max-width: 860px) {
   .main { grid-template-columns: 1fr; }
   .drawer { border-left: 0; border-top: 1px solid var(--line); display: flex; gap: 6px; overflow: auto; }

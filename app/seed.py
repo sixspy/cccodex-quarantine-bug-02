@@ -15,6 +15,7 @@ def seed_if_needed(db_path: str | None = None) -> None:
             ("reconcile_label", "隔离对账口径A", "对账口径标签"),
             ("audit_keep_days", "30", "审计保留天数"),
             ("policy_default_bin", "BIN-A", "规则默认入舱号"),
+            ("release_read_track", "切流账册", "放行读轨口径（只读）"),
         ]
         conn.executemany(
             "INSERT OR IGNORE INTO lab_settings(key, value, label) VALUES (?,?,?)",
@@ -122,9 +123,4 @@ def seed_if_needed(db_path: str | None = None) -> None:
             VALUES ('system', '种子初始化', 'lab', 0, '首次启动写入样例')
             """
         )
-        try:
-            from app.services.release_pack import seed_skew
-            seed_skew(db_path)
-        except Exception:
-            pass
         _meta_set(conn, "seeded", "1")

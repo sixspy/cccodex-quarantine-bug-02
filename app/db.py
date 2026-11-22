@@ -123,6 +123,30 @@ CREATE TABLE IF NOT EXISTS lab_settings (
   label TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS release_ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id INTEGER NOT NULL UNIQUE,
+  row_id INTEGER NOT NULL UNIQUE REFERENCES quarantine_rows(id),
+  item_id INTEGER NOT NULL UNIQUE REFERENCES capture_items(id),
+  item_key TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  channel TEXT NOT NULL CHECK (channel IN ('复核放行', '回炉成功')),
+  reviewer TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TRIGGER IF NOT EXISTS trg_release_ledger_no_update
+BEFORE UPDATE ON release_ledger
+BEGIN
+  SELECT RAISE(ABORT, '放行账册禁回刷：不允许更新');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_release_ledger_no_delete
+BEFORE DELETE ON release_ledger
+BEGIN
+  SELECT RAISE(ABORT, '放行账册禁回刷：不允许删除');
+END;
+
 CREATE TABLE IF NOT EXISTS meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -144,9 +168,10 @@ def ensure_db() -> Path:
 def get_db(db_path: str | Path | None = None):
     path = Path(db_path) if db_path else Config.DATABASE_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=5)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=5000")
     try:
         yield conn
         conn.commit()

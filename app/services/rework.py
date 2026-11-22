@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.db import get_db
 from app.services import audit as audit_svc
+from app.services import release_ledger
 from app.services import settings as settings_svc
 from app.services.errors import ServiceError
 
@@ -50,6 +51,23 @@ def run_job(job_id: int, succeed: bool = True, db_path: str | None = None) -> di
             row = conn.execute(
                 "SELECT * FROM quarantine_rows WHERE id=?", (job["row_id"],)
             ).fetchone()
+            item = conn.execute(
+                "SELECT * FROM capture_items WHERE id=?", (row["item_id"],)
+            ).fetchone()
+            ticket = conn.execute(
+                "SELECT * FROM review_tickets WHERE row_id=? ORDER BY id DESC LIMIT 1",
+                (row["id"],),
+            ).fetchone()
+            # 回炉成功同样是放行：当刻条目键+指纹落入只追加账册，再翻新旗
+            release_ledger._append_release_conn(
+                conn,
+                ticket_id=ticket["id"] if ticket else -job_id,
+                row_id=row["id"],
+                item_id=item["id"],
+                item_key=item["item_key"],
+                reviewer="system-rework",
+                channel="回炉成功",
+            )
             conn.execute(
                 "UPDATE quarantine_rows SET status='已放行' WHERE id=?", (row["id"],)
             )

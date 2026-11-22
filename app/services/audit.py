@@ -46,6 +46,23 @@ def list_events(limit: int = 100, db_path: str | None = None) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def bin_slot_summary(db_path: str | None = None) -> list[dict]:
+    """审计页挂舱位摘要：各隔离舱容量、占用与待复核分布。"""
+    from app.services import quarantine as quarantine_svc
+
+    return [
+        {
+            "bin_code": b["bin_code"],
+            "title": b["title"],
+            "status": b["status"],
+            "capacity": b["capacity"],
+            "row_count": b["row_count"],
+            "pending_count": b["pending_count"],
+        }
+        for b in quarantine_svc.list_bins(db_path)
+    ]
+
+
 def summary(db_path: str | None = None) -> dict:
     with get_db(db_path) as conn:
         total = conn.execute("SELECT COUNT(*) AS c FROM audit_events").fetchone()["c"]
@@ -60,4 +77,5 @@ def summary(db_path: str | None = None) -> dict:
         return {
             "total": total,
             "by_action": [dict(r) for r in by_action],
+            "bin_slots": bin_slot_summary(db_path),
         }

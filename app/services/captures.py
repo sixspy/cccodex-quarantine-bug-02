@@ -9,8 +9,13 @@ def list_batches(db_path: str | None = None) -> list[dict]:
     with get_db(db_path) as conn:
         rows = conn.execute(
             """
-            SELECT id, batch_code, source_name, status, item_count, bad_count, note, created_at
-            FROM capture_batches ORDER BY id DESC
+            SELECT b.id, b.batch_code, b.source_name, b.status, b.item_count,
+                   b.bad_count, b.note, b.created_at,
+                   (SELECT COUNT(*)
+                      FROM capture_items i
+                      JOIN release_ledger l ON l.item_id=i.id
+                     WHERE i.batch_id=b.id) AS released_count
+            FROM capture_batches b ORDER BY b.id DESC
             """
         ).fetchall()
         return [dict(r) for r in rows]
@@ -25,13 +30,40 @@ def get_batch(batch_id: int, db_path: str | None = None) -> dict:
             raise ServiceError("批次不存在", 404)
         items = conn.execute(
             """
-            SELECT id, item_key, quality, status, payload, created_at
-            FROM capture_items WHERE batch_id=? ORDER BY id
+            SELECT i.id, i.item_key, i.quality, i.status, i.payload, i.created_at,
+                   l.id AS ledger_id, l.fingerprint, l.channel, l.reviewer,
+                   l.item_key AS ledger_item_key, l.created_at AS released_at
+            FROM capture_items i
+            LEFT JOIN release_ledger l ON l.item_id=i.id
+            WHERE i.batch_id=? ORDER BY i.id
             """,
             (batch_id,),
         ).fetchall()
         data = dict(row)
-        data["items"] = [dict(i) for i in items]
+        released_items = []
+        out_items = []
+        for i in items:
+            d = dict(i)
+            release = None
+            if d["ledger_id"] is not None:
+                release = {
+                    "ledger_id": d.pop("ledger_id"),
+                    "fingerprint": d.pop("fingerprint"),
+                    "channel": d.pop("channel"),
+                    "reviewer": d.pop("reviewer"),
+                    "item_key": d.pop("ledger_item_key"),
+                    "released_at": d.pop("released_at"),
+                }
+            else:
+                d.pop("ledger_id"), d.pop("fingerprint"), d.pop("channel")
+                d.pop("reviewer"), d.pop("ledger_item_key"), d.pop("released_at")
+            d["release"] = release
+            if release:
+                released_items.append(d)
+            out_items.append(d)
+        data["items"] = out_items
+        # 抓取侧亮已放行件数：以放行账册（新旗读轨）为准
+        data["released_count"] = len(released_items)
         return data
 
 

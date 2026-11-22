@@ -18,9 +18,7 @@ from app.services import reconcile as reconcile_svc
 from app.services import review as review_svc
 from app.services import rework as rework_svc
 from app.services import settings as settings_svc
-from app.services import release_pack as release_pack_svc
-from app.services import release_pack_cutover as release_pack_cutover_svc
-from app.services import release_pack_dualwrite as release_pack_dual_svc
+from app.services import release_ledger as release_ledger_svc
 from app.services import sources as sources_svc
 from app.services.errors import ServiceError
 
@@ -309,37 +307,17 @@ def create_app():
             return _json(policies_svc.apply_to_batch(int(body.get("batch_id") or 0)))
 
 
-        def release_pack_dash(request):
+        def release_ledger_list(request):
             _require(request)
-            return _json(release_pack_cutover_svc.board())
+            return _json({
+                "items": release_ledger_svc.list_entries(),
+                "summary": release_ledger_svc.gate_summary(),
+            })
 
-        def release_pack_commit(request):
+        def release_gate_item(request):
             _require(request)
-            body = _read_json(request)
-            return _json(release_pack_svc.commit_action(body))
-
-        def release_pack_half(request):
-            _require(request)
-            return _json(release_pack_svc.reconcile_display())
-
-        def release_pack_snap(request):
-            _require(request)
-            return _json(release_pack_svc.snapshot())
-
-        def release_pack_cutover(request):
-            _require(request)
-            body = _read_json(request)
-            return _json(
-                release_pack_cutover_svc.append_cutover(
-                    int(body.get("ref_id") or 0),
-                    str(body.get("note") or "放行钉定"),
-                )
-            )
-
-        def release_pack_dual(request):
-            _require(request)
-            body = _read_json(request)
-            return _json(release_pack_dual_svc.apply_dualwrite(str(body.get("note") or "放行钉定")))
+            item_id = int(request.matchdict["id"])
+            return _json(release_ledger_svc.gate_status(item_id))
 
         def audits_list(request):
             _require(request)
@@ -379,12 +357,8 @@ def create_app():
         config.add_route("rule_enable", "/api/rules/{id}/enable")
         config.add_route("rule_apply", "/api/rules/apply")
         config.add_route("audits", "/api/audits")
-        config.add_route("release_pack_dash", "/api/release_pack/dash")
-        config.add_route("release_pack_commit", "/api/release_pack/commit")
-        config.add_route("release_pack_half", "/api/release_pack/half")
-        config.add_route("release_pack_snap", "/api/release_pack/snap")
-        config.add_route("release_pack_cutover", "/api/release_pack/cutover")
-        config.add_route("release_pack_dual", "/api/release_pack/dual")
+        config.add_route("release_ledger", "/api/release_ledger")
+        config.add_route("release_gate_item", "/api/capture_items/{id}/gate")
 
 
         config.add_view(root, route_name="root")
@@ -423,12 +397,8 @@ def create_app():
         config.add_view(wrap(rule_enable), route_name="rule_enable", request_method="POST")
         config.add_view(wrap(rule_apply), route_name="rule_apply", request_method="POST")
         config.add_view(wrap(audits_list), route_name="audits", request_method="GET")
-        config.add_view(wrap(release_pack_dash), route_name="release_pack_dash", request_method="GET")
-        config.add_view(wrap(release_pack_commit), route_name="release_pack_commit", request_method="POST")
-        config.add_view(wrap(release_pack_half), route_name="release_pack_half", request_method="POST")
-        config.add_view(wrap(release_pack_snap), route_name="release_pack_snap", request_method="GET")
-        config.add_view(wrap(release_pack_cutover), route_name="release_pack_cutover", request_method="POST")
-        config.add_view(wrap(release_pack_dual), route_name="release_pack_dual", request_method="POST")
+        config.add_view(wrap(release_ledger_list), route_name="release_ledger", request_method="GET")
+        config.add_view(wrap(release_gate_item), route_name="release_gate_item", request_method="GET")
 
 
         return config.make_wsgi_app()

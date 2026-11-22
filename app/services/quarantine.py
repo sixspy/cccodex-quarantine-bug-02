@@ -12,6 +12,7 @@ def list_bins(db_path: str | None = None) -> list[dict]:
             """
             SELECT b.*,
               (SELECT COUNT(*) FROM quarantine_rows r WHERE r.bin_id=b.id AND r.status='待复核') AS pending_count,
+              (SELECT COUNT(*) FROM quarantine_rows r WHERE r.bin_id=b.id AND r.status='已放行') AS released_count,
               (SELECT COUNT(*) FROM quarantine_rows r WHERE r.bin_id=b.id) AS row_count
             FROM quarantine_bins b ORDER BY b.id
             """
